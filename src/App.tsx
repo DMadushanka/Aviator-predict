@@ -80,6 +80,15 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
 
+  // Helper to ensure all records have a valid unique ID (handles migration and missing IDs)
+  const sanitizeRecords = (records: any[]): MultiplierRecord[] => {
+    if (!Array.isArray(records)) return [];
+    return records.map((r, index) => ({
+      ...r,
+      id: r.id || `rec_${r.timestamp || Date.now()}_${index}`
+    }));
+  };
+
   // Stats Slider Threshold
   const [statThreshold, setStatThreshold] = useState<number>(20.0);
 
@@ -184,7 +193,7 @@ export default function App() {
       const res = await fetch('/api/multipliers');
       if (res.ok) {
         const data = await res.json();
-        setMultipliers(data);
+        setMultipliers(sanitizeRecords(data));
         setDbConnected(true);
       }
     } catch (error) {
@@ -205,12 +214,13 @@ export default function App() {
         const res = await fetch('/api/multipliers');
         if (res.ok) {
           const data = await res.json();
+          const sanitized = sanitizeRecords(data);
           setMultipliers(prev => {
             // Compare newest multiplier's ID or list length to avoid unnecessary state triggers
-            const hasChanged = prev.length !== data.length || (prev.length > 0 && data.length > 0 && prev[0].id !== data[0].id);
+            const hasChanged = prev.length !== sanitized.length || (prev.length > 0 && sanitized.length > 0 && prev[0].id !== sanitized[0].id);
             if (hasChanged) {
-              evaluateRules(data, rules);
-              return data;
+              evaluateRules(sanitized, rules);
+              return sanitized;
             }
             return prev;
           });
@@ -295,7 +305,7 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        const updated = [data, ...multipliers];
+        const updated = sanitizeRecords([data, ...multipliers]);
         setMultipliers(updated);
         evaluateRules(updated, rules);
       }
@@ -309,7 +319,7 @@ export default function App() {
         timestamp: Date.now(),
         source
       };
-      const updated = [newRec, ...multipliers];
+      const updated = sanitizeRecords([newRec, ...multipliers]);
       setMultipliers(updated);
       evaluateRules(updated, rules);
     }

@@ -35,6 +35,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Invalid multiplier value. Must be >= 1" });
       }
       const record = {
+        id: "rec_" + Math.random().toString(36).substring(2, 11),
         multiplier: Math.round(multiplier * 100) / 100,
         timestamp: Date.now(),
         source: source ?? "manual",
