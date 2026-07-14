@@ -1,0 +1,192 @@
+/**
+ * =========================================================
+ *  MOSTBET / SPRIBE AVIATOR REAL-TIME SCRAPER SCRIPT
+ * =========================================================
+ * This script runs in your browser console directly on 
+ * Mostbet's Aviator page. It watches the game DOM for new
+ * multipliers and automatically syncs them to your database.
+ */
+(function() {
+  const TRACKER_URL = "https://tame-adults-bow.loca.lt";
+
+  // 1. Retrieve original un-overridden console methods to bypass game anti-logging protection
+  let originalConsoleLog = console.log;
+  let originalConsoleWarn = console.warn;
+  let originalConsoleError = console.error;
+  try {
+    const rawIframe = document.createElement('iframe');
+    rawIframe.style.display = 'none';
+    document.body.appendChild(rawIframe);
+    if (rawIframe.contentWindow && rawIframe.contentWindow.console) {
+      originalConsoleLog = rawIframe.contentWindow.console.log.bind(rawIframe.contentWindow.console);
+      originalConsoleWarn = rawIframe.contentWindow.console.warn.bind(rawIframe.contentWindow.console);
+      originalConsoleError = rawIframe.contentWindow.console.error.bind(rawIframe.contentWindow.console);
+    }
+  } catch (e) {
+    // Fallback if blocked
+  }
+
+  originalConsoleLog("%c🚀 Aviator Real-Time Scraper Payload Loaded!", "color: #f43f5e; font-size: 16px; font-weight: bold;");
+  originalConsoleLog("Current Frame Execution Origin:", window.location.href);
+  originalConsoleLog("Target Database API URL:", TRACKER_URL);
+
+  let lastSavedMultiplier = null;
+  let warnCounter = 0;
+  let syncCount = 0;
+  let lastSyncTimeText = "";
+
+  // 2. Establish a beautiful diagnostic HUD overlay in the bottom corner of the Aviator game
+  let hud = document.getElementById('aviator-pilot-hud');
+  if (!hud) {
+    hud = document.createElement('div');
+    hud.id = 'aviator-pilot-hud';
+    hud.style.position = 'fixed';
+    hud.style.bottom = '15px';
+    hud.style.right = '15px';
+    hud.style.zIndex = '999999';
+    hud.style.backgroundColor = 'rgba(8, 12, 26, 0.95)';
+    hud.style.border = '1px solid rgba(244, 63, 94, 0.5)';
+    hud.style.borderRadius = '16px';
+    hud.style.padding = '14px 16px';
+    hud.style.color = '#fff';
+    hud.style.fontFamily = '"JetBrains Mono", monospace, sans-serif';
+    hud.style.fontSize = '11px';
+    hud.style.boxShadow = '0 10px 30px -5px rgba(0,0,0,0.8), 0 0 15px rgba(244, 63, 94, 0.25)';
+    hud.style.width = '245px';
+    hud.style.lineHeight = '1.4';
+    hud.style.transition = 'all 0.3s ease';
+    document.body.appendChild(hud);
+  }
+
+  function updateHUD(status, latestVal, successMsg) {
+    if (!hud) return;
+    hud.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+        <span style="color:#f43f5e; font-weight:bold; letter-spacing:1px; font-size:10px;">🛰️ AVIATOR DAEMON</span>
+        <span style="background:#10b981; color:#fff; font-size:9px; padding:2px 8px; border-radius:12px; font-weight:bold; text-transform:uppercase;">${status}</span>
+      </div>
+      <div style="margin-bottom:5px; color:#94a3b8;">Latest Scanned: <strong style="color:#fff; font-size:14px; font-family:monospace;">${latestVal || 'Scanning...'}</strong></div>
+      <div style="margin-bottom:5px; color:#94a3b8;">Synced Count: <strong style="color:#10b981; font-size:13px;">${syncCount}</strong></div>
+      <div style="margin-bottom:8px; color:#94a3b8; font-size:9px; word-break:break-all;">Target: <span style="color:#cbd5e1;">${TRACKER_URL}</span></div>
+      <div style="font-size:9px; color:#64748b; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px; margin-top:6px;">
+        ${successMsg || 'Waiting for first round resolution...'}
+      </div>
+    `;
+  }
+
+  updateHUD("ACTIVE", "SCANNING...", "Awaiting round finish...");
+
+  async function syncMultiplierToDB(val) {
+    try {
+      const response = await fetch(`${TRACKER_URL}/api/multipliers`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'text/plain',
+          'Bypass-Tunnel-Reminder': 'true',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ multiplier: parseFloat(val), source: 'scraper' })
+      });
+      const data = await response.json();
+      syncCount++;
+      const now = new Date();
+      lastSyncTimeText = now.toLocaleTimeString();
+      originalConsoleLog(`%c✅ Multiplier ${val}x successfully synced! ID: ${data.id}`, "color: #10b981; font-weight: bold;");
+      updateHUD("ACTIVE", `${val}x`, `✅ Last synced at ${lastSyncTimeText}`);
+    } catch (err) {
+      originalConsoleError("❌ Failed syncing multiplier to database:", err);
+      updateHUD("ERR_CONN", `${val}x`, `❌ Connection to applet failed!`);
+    }
+  }
+
+  // 3. Monitor DOM elements using specific Spribe Aviator history selectors
+  function scanAndSync() {
+    // Try to find the horizontal history ribbon container first to ensure we get the correct order and avoid draft elements
+    let container = document.querySelector('app-stats-list');
+    if (!container) {
+      // Look for fallback containers, prioritizing ones that are NOT inside dropdowns
+      const elements = document.querySelectorAll('.payouts-block, .stats-list, .history-wrapper, .history-list');
+      for (const el of elements) {
+        if (!el.closest('app-stats-dropdown') && !el.closest('.dropdown-menu')) {
+          container = el;
+          break;
+        }
+      }
+      // If still not found, fallback to the first one available
+      if (!container && elements.length > 0) {
+        container = elements[0];
+      }
+    }
+
+    // Query history items either within the container or globally as a last fallback
+    const itemsSelector = 'app-stats-item, .payout, [appcoloredmultiplier], .stats-pin, .bubble-multiplier, [class*="bubble-multiplier"]';
+    const elements = container 
+      ? container.querySelectorAll(itemsSelector)
+      : document.querySelectorAll(itemsSelector);
+
+    const multiplierRegex = /^\s*(\d+(?:\.\d+)?)\s*x?\s*$/i;
+    const foundElements = [];
+
+    for (const el of elements) {
+      // Avoid elements inside dropdowns if we are in global fallback mode
+      if (!container && (el.closest('app-stats-dropdown') || el.closest('.dropdown-menu'))) {
+        continue;
+      }
+      
+      let text = (el.textContent || '').trim();
+      // Remove any thousand separator commas (e.g., 1,090.08x -> 1090.08x) to support large multipliers
+      text = text.replace(/,/g, '');
+      const match = text.match(multiplierRegex);
+      if (match) {
+        const val = parseFloat(match[1]);
+        if (!isNaN(val) && val >= 1.0 && val < 100000.0) {
+          foundElements.push({ element: el, value: val, rawText: text });
+        }
+      }
+    }
+
+    if (foundElements.length === 0) {
+      warnCounter++;
+      if (warnCounter === 1 || warnCounter % 15 === 0) {
+        originalConsoleWarn("%c⚠️ CONSOLE CONTEXT ERROR: No game multipliers found!", "color: #ff3333; font-weight: bold; font-size: 13px;");
+        originalConsoleWarn("👉 Currently inspecting:", window.location.href);
+        updateHUD("LOOKING", "SEARCHING DOM", "⚠️ Is the console dropdown set to top context?");
+      }
+      return;
+    }
+
+    if (warnCounter > 0) {
+      originalConsoleLog("%c🎉 SUCCESS: Scraper has successfully locked onto the game DOM elements!", "color: #10b981; font-weight: bold; font-size: 14px;");
+      warnCounter = 0;
+    }
+
+    // In Spribe Aviator, the most recent crash multiplier is the FIRST element in the chronological row list (leftmost)
+    const latestRecord = foundElements[0];
+    if (!latestRecord) return;
+
+    const multiplierVal = latestRecord.value;
+
+    if (multiplierVal !== lastSavedMultiplier) {
+      lastSavedMultiplier = multiplierVal;
+      originalConsoleLog(`✈️ Detected New Round Multiplier: ${multiplierVal}x (Source: ${latestRecord.rawText})`);
+      syncMultiplierToDB(multiplierVal);
+    }
+  }
+
+  // Run first checks immediately
+  scanAndSync();
+
+  // 4. Setup Observer on the stats board to detect immediate round resolutions
+  const statsBoard = document.querySelector('app-stats-list') || document.querySelector('.payouts-block') || document.querySelector('.stats-list') || document.querySelector('.history-wrapper') || document.querySelector('.history-list') || document.body;
+  
+  const observer = new MutationObserver(() => {
+    scanAndSync();
+  });
+
+  observer.observe(statsBoard, { childList: true, subtree: true });
+
+  // Fallback high-frequency poller to ensure zero missed rounds
+  setInterval(scanAndSync, 1200);
+  
+  return "🟢 Mostbet Aviator Pilot Daemon activated with Floating HUD feedback!";
+})();

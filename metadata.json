@@ -1,0 +1,6 @@
+{
+  "name": "Aviator Tracker & Pattern Predictor",
+  "description": "Real-time crash multiplier logger, statistics dashboard, custom cold-streak alerts, and Gemini AI pattern advisor for Aviator game analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
