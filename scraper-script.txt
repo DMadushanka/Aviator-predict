@@ -7,7 +7,7 @@
  * multipliers and automatically syncs them to your database.
  */
 (function() {
-  const TRACKER_URL = "https://tame-adults-bow.loca.lt";
+  const TRACKER_URL = "https://aviator-predict-13vq.vercel.app";
 
   // 1. Retrieve original un-overridden console methods to bypass game anti-logging protection
   let originalConsoleLog = console.log;
