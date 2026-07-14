@@ -1,14 +1,14 @@
 // lib/kv.ts
 // Wrapper around Upstash Redis for multiplier storage.
 // Uses @upstash/redis with env vars automatically injected by the Vercel Upstash integration:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+//   KV_REST_API_URL
+//   KV_REST_API_TOKEN
 
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
 });
 
 const LIST_KEY = "multipliers";
