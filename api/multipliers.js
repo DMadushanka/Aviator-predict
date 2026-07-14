@@ -1,22 +1,12 @@
-// api/multipliers.ts
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getMultipliers, addMultiplier } from "../lib/kv";
+// api/multipliers.js
+import { getMultipliers, addMultiplier } from "../lib/kv.js";
 
-function setCORSHeaders(res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, Bypass-Tunnel-Reminder, ngrok-skip-browser-warning"
-  );
-  res.setHeader("Access-Control-Allow-Private-Network", "true");
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCORSHeaders(res);
-
-  // Handle CORS preflight
+export default async function handler(req, res) {
+  // CORS is already handled globally by vercel.json, but keep this for options requests or extra safety
   if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Bypass-Tunnel-Reminder, ngrok-skip-browser-warning");
     return res.status(200).end();
   }
 
@@ -24,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const data = await getMultipliers();
       return res.status(200).json(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error("KV GET error:", err);
       return res.status(500).json({ error: err.message || "Failed to fetch multipliers" });
     }
@@ -33,9 +23,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "POST") {
     try {
       let body = req.body;
-      // Handle text/plain bodies (sent by the scraper)
       if (typeof body === "string") {
-        try { body = JSON.parse(body); } catch {
+        try {
+          body = JSON.parse(body);
+        } catch {
           return res.status(400).json({ error: "Invalid JSON body" });
         }
       }
@@ -50,12 +41,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       await addMultiplier(record);
       return res.status(201).json(record);
-    } catch (err: any) {
+    } catch (err) {
       console.error("KV POST error:", err);
       return res.status(500).json({ error: err.message || "Failed to add multiplier" });
     }
   }
 
-  res.setHeader("Allow", "GET, POST, OPTIONS");
   return res.status(405).end();
 }
