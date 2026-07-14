@@ -1,20 +1,28 @@
 // lib/kv.ts
-// Simple wrapper around Vercel KV for multiplier storage
-// Stores each multiplier as a JSON string in a Redis list "multipliers"
-// The list is kept capped at 1000 items (most recent).
+// Wrapper around Upstash Redis for multiplier storage.
+// Uses @upstash/redis with env vars automatically injected by the Vercel Upstash integration:
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
 
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
 const LIST_KEY = "multipliers";
 const MAX_ITEMS = 1000;
 
 /** Retrieve all multiplier records (most recent first) */
 export async function getMultipliers(): Promise<any[]> {
-  const items = await kv.lrange(LIST_KEY, 0, -1);
+  const items = await redis.lrange(LIST_KEY, 0, -1);
   return items
     .map((s) => {
       try {
-        return JSON.parse(s);
+        // Upstash may auto-parse JSON strings; handle both object and string
+        if (typeof s === "object") return s;
+        return JSON.parse(s as string);
       } catch {
         return null;
       }
@@ -22,16 +30,17 @@ export async function getMultipliers(): Promise<any[]> {
     .filter(Boolean);
 }
 
-/** Add a new multiplier record */
+/** Add a new multiplier record (newest pushed to the left so it appears first) */
 export async function addMultiplier(record: any): Promise<void> {
   const payload = JSON.stringify(record);
-  await kv.lpush(LIST_KEY, payload);
-  await kv.ltrim(LIST_KEY, 0, MAX_ITEMS - 1);
+  await redis.lpush(LIST_KEY, payload);
+  // Trim list to keep only the most recent MAX_ITEMS entries
+  await redis.ltrim(LIST_KEY, 0, MAX_ITEMS - 1);
 }
 
-/** Clear all multiplier records */
+/** Delete all multiplier records and return how many were removed */
 export async function clearMultipliers(): Promise<number> {
-  const count = await kv.llen(LIST_KEY);
-  await kv.del(LIST_KEY);
+  const count = await redis.llen(LIST_KEY);
+  await redis.del(LIST_KEY);
   return count;
 }
