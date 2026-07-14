@@ -23,6 +23,12 @@ body {
   overflow-x: hidden;
 }
 
+/* ===== FADE IN ENTRY ANIMATION ===== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ===== CUSTOM GLOW ANIMATIONS ===== */
 @keyframes neon-glow {
   0%, 100% {

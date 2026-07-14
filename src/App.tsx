@@ -443,12 +443,11 @@ export default function App() {
   });
 
   return (
-    <motion.div 
+    <div 
       className="min-h-screen bg-[#060814] font-sans text-slate-200 antialiased selection:bg-rose-500/30 selection:text-white bg-grid-pattern"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      style={{ animation: 'fadeIn 0.5s ease-out' }}
     >
+
       {/* Animated Background Particles */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         {[...Array(6)].map((_, i) => (
@@ -1082,6 +1081,6 @@ export default function App() {
           HOUSE ADVISORY: Trial outcomes are statistically independent random events. Use metrics and AI pattern suggestions as statistical guidance only. Play responsibly.
         </p>
       </motion.footer>
-    </motion.div>
+    </div>
   );
 }
