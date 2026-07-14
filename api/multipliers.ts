@@ -2,22 +2,44 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getMultipliers, addMultiplier } from "../lib/kv";
 
+function setCORSHeaders(res: VercelResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, Bypass-Tunnel-Reminder, ngrok-skip-browser-warning"
+  );
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCORSHeaders(res);
+
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method === "GET") {
     try {
       const data = await getMultipliers();
-      // KV stores newest first via LPUSH, so return as‑is
-      res.status(200).json(data);
+      return res.status(200).json(data);
     } catch (err: any) {
       console.error("KV GET error:", err);
-      res.status(500).json({ error: err.message || "Failed to fetch multipliers" });
+      return res.status(500).json({ error: err.message || "Failed to fetch multipliers" });
     }
-    return;
   }
 
   if (req.method === "POST") {
     try {
-      const { multiplier, source } = req.body || {};
+      let body = req.body;
+      // Handle text/plain bodies (sent by the scraper)
+      if (typeof body === "string") {
+        try { body = JSON.parse(body); } catch {
+          return res.status(400).json({ error: "Invalid JSON body" });
+        }
+      }
+      const { multiplier, source } = body || {};
       if (typeof multiplier !== "number" || isNaN(multiplier) || multiplier < 1) {
         return res.status(400).json({ error: "Invalid multiplier value. Must be >= 1" });
       }
@@ -27,15 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         source: source ?? "manual",
       };
       await addMultiplier(record);
-      res.status(201).json(record);
+      return res.status(201).json(record);
     } catch (err: any) {
       console.error("KV POST error:", err);
-      res.status(500).json({ error: err.message || "Failed to add multiplier" });
+      return res.status(500).json({ error: err.message || "Failed to add multiplier" });
     }
-    return;
   }
 
-  // Unsupported method
-  res.setHeader("Allow", "GET,POST");
-  res.status(405).end();
+  res.setHeader("Allow", "GET, POST, OPTIONS");
+  return res.status(405).end();
 }
